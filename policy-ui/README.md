@@ -39,6 +39,34 @@ The `policy_underwriting` workflow (v1) must already be registered on the tenant
 | `GET /api/applications/{id}` | `GET /workflow/{id}?includeTasks=true` (flags the WAIT task) |
 | `POST /api/applications/{id}/review` | `POST /tasks/{id}/underwriter_review_ref/COMPLETED` |
 
+## Deployed (AWS Amplify Gen 2)
+
+Live console: **https://main.d1f70ggy6d53if.amplifyapp.com** (region `ap-southeast-1`).
+
+| | |
+|---|---|
+| Amplify app id | `d1f70ggy6d53if` |
+| Branch | `main` (auto-build on push) |
+| Backend | Lambda + public Function URL (`authType: NONE`), from `amplify/` |
+| Service role | `AmplifyBackendDeployRole-policy-underwriting-demo` (`AmplifyBackendDeployFullAccess`) |
+| Secrets | `CONDUCTOR_SERVER_URL` / `CONDUCTOR_AUTH_KEY` / `CONDUCTOR_AUTH_SECRET` at `/amplify/shared/<appId>/` (SSM SecureString) |
+
+The build (`../amplify.yml`) runs `ampx pipeline-deploy` for the backend, then rewrites
+`public/config.js` with that branch's Function URL — so `config.js` stays `apiBase: ''`
+in git on purpose. Verified end-to-end: browser → Amplify Hosting → Lambda → Conductor →
+`ACCEPTED_STANDARD`, premium + PDF returned.
+
+**Setup gotchas hit while deploying:**
+
+- **Connect the app with an IAM service role.** Creating the app in the console without
+  one makes the backend build fail at CDK bootstrap detection (`ssm:GetParameter ... AccessDenied`)
+  because it runs under Amplify's restricted shared role. Attach a role trusting
+  `amplify.amazonaws.com` with `AmplifyBackendDeployFullAccess`.
+- **Watch for a truncated secret.** A key pasted one character short surfaces only at
+  runtime as `Token exchange failed (403): Invalid Access Key` — the build still goes
+  green. Fix the SSM value and redeploy (Gen 2 bakes secret values in at deploy time, so
+  a rebuild is required to pick up the change).
+
 ## Not production
 
 Prototype only — no authentication. `reviewedBy` is free text that should be bound to an
