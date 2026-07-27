@@ -1,0 +1,17 @@
+{
+  "applicationId": "POL-3004",
+  "fullName": "Hendra Gunawan",
+  "gender": "M",
+  "dateOfBirth": "1986-06-01",
+  "asOfDate": "2026-07-27",
+  "annualIncome": 800000000,
+  "sumAssured": 6000000000,
+  "policyTermYears": 20,
+  "smoker": false,
+  "heightCm": 180,
+  "weightKg": 78,
+  "occupationClass": 1,
+  "medicalConditions": [],
+  "familyHistory": [],
+  "hazardousHobbies": []
+}

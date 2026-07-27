@@ -1,0 +1,9 @@
+.env
+node_modules/
+
+# Amplify Gen 2
+.amplify/
+amplify_outputs*.json
+amplifyconfiguration*.json
+.npm/
+cdk.out/

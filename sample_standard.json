@@ -1,0 +1,17 @@
+{
+  "applicationId": "POL-1001",
+  "fullName": "Andi Wijaya",
+  "gender": "M",
+  "dateOfBirth": "1996-05-10",
+  "asOfDate": "2026-07-27",
+  "annualIncome": 500000000,
+  "sumAssured": 1000000000,
+  "policyTermYears": 20,
+  "smoker": false,
+  "heightCm": 175,
+  "weightKg": 68,
+  "occupationClass": 1,
+  "medicalConditions": [],
+  "familyHistory": [],
+  "hazardousHobbies": []
+}

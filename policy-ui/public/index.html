@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BRI Life · Underwriting Asuransi Jiwa</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">BRI<span class="logo-sub">Life</span></span>
+      <div class="brand-text">
+        <strong>Sistem Underwriting Asuransi Jiwa</strong>
+        <small>Term-Life Underwriting</small>
+      </div>
+    </div>
+    <span class="demo-badge">PROTOTYPE / DEMO</span>
+  </header>
+
+  <main class="layout">
+    <!-- Application form -->
+    <section class="card form-card">
+      <h2>Formulir Pengajuan Polis</h2>
+      <p class="muted">Lengkapi data calon tertanggung. Nominal dalam Rupiah (IDR).</p>
+      <form id="applicationForm">
+        <div class="grid">
+          <label>Nama Lengkap
+            <input name="fullName" type="text" value="Andi Wijaya" required />
+          </label>
+          <label>ID Pengajuan
+            <input name="applicationId" type="text" value="POL-1001" required />
+          </label>
+          <label>Jenis Kelamin
+            <select name="gender">
+              <option value="M">Laki-laki</option>
+              <option value="F">Perempuan</option>
+            </select>
+          </label>
+          <label>Tanggal Lahir
+            <input name="dateOfBirth" type="date" value="1996-05-10" required />
+          </label>
+          <label>Uang Pertanggungan (IDR)
+            <input name="sumAssured" type="number" min="0" value="1000000000" required />
+          </label>
+          <label>Jangka Waktu (tahun)
+            <input name="policyTermYears" type="number" min="1" value="20" required />
+          </label>
+          <label>Penghasilan Tahunan (IDR)
+            <input name="annualIncome" type="number" min="0" value="500000000" required />
+          </label>
+          <label>Kelas Pekerjaan
+            <select name="occupationClass">
+              <option value="1">1 — Kantoran / profesional</option>
+              <option value="2">2 — Manual ringan / ritel</option>
+              <option value="3">3 — Manual berat / konstruksi</option>
+              <option value="4">4 — Berbahaya (tambang, lepas pantai)</option>
+            </select>
+          </label>
+          <label>Merokok
+            <select name="smoker">
+              <option value="false">Tidak</option>
+              <option value="true">Ya</option>
+            </select>
+          </label>
+          <label>Tinggi Badan (cm)
+            <input name="heightCm" type="number" min="0" value="175" required />
+          </label>
+          <label>Berat Badan (kg)
+            <input name="weightKg" type="number" min="0" value="68" required />
+          </label>
+        </div>
+
+        <h3>Riwayat Kesehatan</h3>
+        <div class="checkgroup" data-group="medicalConditions">
+          <label class="chk"><input type="checkbox" value="hypertension_controlled" /> Hipertensi (terkontrol)</label>
+          <label class="chk"><input type="checkbox" value="hypertension_uncontrolled" /> Hipertensi (tidak terkontrol)</label>
+          <label class="chk"><input type="checkbox" value="diabetes_type2_controlled" /> Diabetes tipe-2 (terkontrol)</label>
+          <label class="chk"><input type="checkbox" value="diabetes_type2_uncontrolled" /> Diabetes tipe-2 (tidak terkontrol)</label>
+          <label class="chk"><input type="checkbox" value="high_cholesterol" /> Kolesterol tinggi</label>
+          <label class="chk"><input type="checkbox" value="asthma_mild" /> Asma ringan</label>
+          <label class="chk"><input type="checkbox" value="sleep_apnea" /> Sleep apnea</label>
+          <label class="chk"><input type="checkbox" value="cancer_remission" /> Kanker (remisi)</label>
+          <label class="chk"><input type="checkbox" value="active_cancer" /> Kanker aktif</label>
+          <label class="chk"><input type="checkbox" value="pending_surgery" /> Menunggu operasi</label>
+          <label class="chk"><input type="checkbox" value="pending_diagnosis" /> Menunggu diagnosis</label>
+        </div>
+
+        <h3>Riwayat Keluarga</h3>
+        <div class="checkgroup" data-group="familyHistory">
+          <label class="chk"><input type="checkbox" value="cardiac_before_60" /> Jantung sebelum usia 60</label>
+          <label class="chk"><input type="checkbox" value="cancer_before_60" /> Kanker sebelum usia 60</label>
+          <label class="chk"><input type="checkbox" value="stroke_before_60" /> Stroke sebelum usia 60</label>
+          <label class="chk"><input type="checkbox" value="diabetes" /> Diabetes</label>
+        </div>
+
+        <h3>Hobi Berisiko</h3>
+        <div class="checkgroup" data-group="hazardousHobbies">
+          <label class="chk"><input type="checkbox" value="scuba_diving" /> Selam scuba</label>
+          <label class="chk"><input type="checkbox" value="private_aviation" /> Penerbangan pribadi</label>
+          <label class="chk"><input type="checkbox" value="motorsport" /> Balap motor/mobil</label>
+          <label class="chk"><input type="checkbox" value="mountaineering" /> Pendakian gunung</label>
+          <label class="chk"><input type="checkbox" value="skydiving" /> Terjun payung</label>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary" id="submitBtn">Ajukan Polis</button>
+          <button type="button" class="btn ghost" id="fillRated">Contoh Rated</button>
+          <button type="button" class="btn ghost" id="fillRefer">Contoh Tinjauan</button>
+          <button type="button" class="btn ghost" id="fillLargeCase">Contoh Kasus Besar</button>
+          <button type="button" class="btn ghost" id="fillDecline">Contoh Ditolak</button>
+          <button type="button" class="btn ghost" id="fillPostpone">Contoh Ditunda</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Result -->
+    <section class="card result-card" id="resultCard" hidden>
+      <div class="result-head">
+        <h2>Keputusan Underwriting</h2>
+        <span class="status-pill" id="statusPill">—</span>
+      </div>
+      <div id="progress" class="progress" hidden>
+        <div class="spinner"></div>
+        <span id="progressText">Memproses pengajuan…</span>
+      </div>
+
+      <div id="decision" hidden>
+        <div class="metrics">
+          <div class="metric"><span class="metric-label">Skor Risiko</span><span class="metric-value" id="mScore">—</span></div>
+          <div class="metric"><span class="metric-label">Kelas Risiko</span><span class="metric-value" id="mClass">—</span></div>
+          <div class="metric"><span class="metric-label">Loading Premi</span><span class="metric-value" id="mLoading">—</span></div>
+          <div class="metric"><span class="metric-label">Premi Tahunan</span><span class="metric-value" id="mAnnual">—</span></div>
+          <div class="metric"><span class="metric-label">Premi Bulanan</span><span class="metric-value" id="mMonthly">—</span></div>
+          <div class="metric"><span class="metric-label">Usia / BMI</span><span class="metric-value" id="mAgeBmi">—</span></div>
+        </div>
+
+        <div class="reasons">
+          <h3>Faktor Penilaian Risiko</h3>
+          <ul id="reasonList"></ul>
+        </div>
+
+        <div class="reasons" id="exclusionsWrap" hidden>
+          <h3>Pengecualian Polis</h3>
+          <ul id="exclusionList" class="exclusions"></ul>
+        </div>
+
+        <div class="letter">
+          <h3>Surat Keputusan</h3>
+          <div class="letter-body" id="letterBody"></div>
+        </div>
+      </div>
+
+      <!-- Underwriter review panel (shown when workflow waits) -->
+      <div id="reviewPanel" class="review-panel" hidden>
+        <h3>Tinjauan Underwriter</h3>
+        <p class="muted">Pengajuan ini dirujuk untuk keputusan manual (skor ambang batas / kasus besar).</p>
+        <div class="grid">
+          <label>Keputusan
+            <select id="rvDecision">
+              <option value="ACCEPT">Setujui</option>
+              <option value="DECLINE">Tolak</option>
+              <option value="POSTPONE">Tunda</option>
+            </select>
+          </label>
+          <label>Loading Premi (%)
+            <input id="rvLoading" type="number" min="0" step="25" value="75" />
+          </label>
+          <label>Underwriter
+            <input id="rvBy" type="text" value="Chief Underwriter" />
+          </label>
+        </div>
+        <label>Catatan
+          <input id="rvNote" type="text" value="APS ditinjau; risiko dapat diterima dengan penyesuaian premi." />
+        </label>
+        <button type="button" class="btn primary" id="submitReview">Kirim Keputusan</button>
+      </div>
+
+      <div id="errorBox" class="error-box" hidden></div>
+      <div class="result-foot">
+        <button type="button" class="btn ghost" id="newApp">Pengajuan Baru</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Prototype internal — bukan sistem produksi. Ditenagai oleh Orkes Conductor.
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

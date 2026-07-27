@@ -1,0 +1,339 @@
+{
+  "name": "policy_underwriting",
+  "description": "Standalone term-life underwriting. Validates the application, computes a deterministic explainable mortality-risk score (age, smoker, BMI, occupation class, medical & family history, hazardous pursuits, plus structural age/maturity limits and financial anti-over-insurance rules), routes Accept-standard / Accept-rated (loading + exclusions) / Refer (underwriter WAIT) / Decline / Postpone, prices the annual premium, then an LLM writes a compliant underwriting decision letter rendered to PDF and notifies the applicant.",
+  "version": 1,
+  "schemaVersion": 2,
+  "restartable": true,
+  "ownerEmail": "",
+  "timeoutPolicy": "ALERT_ONLY",
+  "timeoutSeconds": 0,
+  "inputParameters": [
+    "applicationId",
+    "fullName",
+    "gender",
+    "dateOfBirth",
+    "asOfDate",
+    "annualIncome",
+    "sumAssured",
+    "policyTermYears",
+    "smoker",
+    "heightCm",
+    "weightKg",
+    "occupationClass",
+    "medicalConditions",
+    "familyHistory",
+    "hazardousHobbies"
+  ],
+  "variables": {
+    "finalStatus": "PENDING",
+    "riskClass": "None",
+    "annualPremium": 0,
+    "monthlyPremium": 0,
+    "loadingPct": 0,
+    "exclusions": [],
+    "reviewNote": ""
+  },
+  "tasks": [
+    {
+      "name": "validate_application",
+      "taskReferenceName": "validate_ref",
+      "type": "INLINE",
+      "inputParameters": {
+        "evaluatorType": "graaljs",
+        "applicationId": "${workflow.input.applicationId}",
+        "fullName": "${workflow.input.fullName}",
+        "sumAssured": "${workflow.input.sumAssured}",
+        "policyTermYears": "${workflow.input.policyTermYears}",
+        "heightCm": "${workflow.input.heightCm}",
+        "weightKg": "${workflow.input.weightKg}",
+        "dateOfBirth": "${workflow.input.dateOfBirth}",
+        "occupationClass": "${workflow.input.occupationClass}",
+        "expression": "(function(){var e=[];if(!$.applicationId||String($.applicationId).length===0){e.push('applicationId is required');}if(!$.fullName||String($.fullName).length===0){e.push('fullName is required');}if(!(Number($.sumAssured)>0)){e.push('sumAssured must be a positive number');}if(!(Number($.policyTermYears)>0)){e.push('policyTermYears must be a positive number');}if(!(Number($.heightCm)>0)){e.push('heightCm must be a positive number');}if(!(Number($.weightKg)>0)){e.push('weightKg must be a positive number');}if(!$.dateOfBirth||String($.dateOfBirth).length===0){e.push('dateOfBirth is required (YYYY-MM-DD)');}var oc=Number($.occupationClass);if(!(oc>=1&&oc<=4)){e.push('occupationClass must be an integer 1-4');}return {valid:e.length===0,errors:e};})();"
+      }
+    },
+    {
+      "name": "validation_gate",
+      "taskReferenceName": "validation_gate_ref",
+      "type": "SWITCH",
+      "evaluatorType": "graaljs",
+      "expression": "$.valid ? 'VALID' : 'INVALID'",
+      "inputParameters": {
+        "valid": "${validate_ref.output.result.valid}"
+      },
+      "decisionCases": {
+        "INVALID": [
+          {
+            "name": "terminate_invalid",
+            "taskReferenceName": "terminate_invalid_ref",
+            "type": "TERMINATE",
+            "inputParameters": {
+              "terminationStatus": "FAILED",
+              "terminationReason": "Application failed validation",
+              "workflowOutput": {
+                "finalStatus": "VALIDATION_FAILED",
+                "errors": "${validate_ref.output.result.errors}"
+              }
+            }
+          }
+        ]
+      },
+      "defaultCase": []
+    },
+    {
+      "name": "stringify_inputs",
+      "taskReferenceName": "stringify_inputs_ref",
+      "type": "JSON_JQ_TRANSFORM",
+      "inputParameters": {
+        "medicalConditions": "${workflow.input.medicalConditions}",
+        "familyHistory": "${workflow.input.familyHistory}",
+        "hazardousHobbies": "${workflow.input.hazardousHobbies}",
+        "queryExpression": "{medicalConditions:(.medicalConditions // []),familyHistory:(.familyHistory // []),hazardousHobbies:(.hazardousHobbies // [])} | tojson"
+      }
+    },
+    {
+      "name": "assess_risk",
+      "taskReferenceName": "assess_ref",
+      "type": "INLINE",
+      "inputParameters": {
+        "evaluatorType": "graaljs",
+        "payload": "${stringify_inputs_ref.output.result}",
+        "dateOfBirth": "${workflow.input.dateOfBirth}",
+        "asOfDate": "${workflow.input.asOfDate}",
+        "policyTermYears": "${workflow.input.policyTermYears}",
+        "sumAssured": "${workflow.input.sumAssured}",
+        "annualIncome": "${workflow.input.annualIncome}",
+        "smoker": "${workflow.input.smoker}",
+        "heightCm": "${workflow.input.heightCm}",
+        "weightKg": "${workflow.input.weightKg}",
+        "occupationClass": "${workflow.input.occupationClass}",
+        "expression": "(function(){var data={};try{data=JSON.parse($.payload)||{};}catch(e){data={};}var med=data.medicalConditions||[];var fam=data.familyHistory||[];var hob=data.hazardousHobbies||[];function has(a,v){for(var i=0;i<a.length;i++){if(String(a[i])===v){return true;}}return false;}var dob=String($.dateOfBirth||'');var asOf=String($.asOfDate||'');var age=0;if(dob&&asOf){var d=dob.split('-');var a=asOf.split('-');if(d.length===3&&a.length===3){age=Number(a[0])-Number(d[0]);var m=Number(a[1])-Number(d[1]);if(m<0||(m===0&&Number(a[2])<Number(d[2]))){age=age-1;}}}var term=Number($.policyTermYears)||0;var sumAssured=Number($.sumAssured)||0;var income=Number($.annualIncome)||0;var smoker=($.smoker===true||String($.smoker)==='true');var h=Number($.heightCm)||0;var w=Number($.weightKg)||0;var occ=Number($.occupationClass)||1;var bmi=(h>0)?Math.round((w/((h/100)*(h/100)))*10)/10:0;var reasons=[];var exclusions=[];var declineReasons=[];var postponeReasons=[];var referReasons=[];var score=0;var declineSet=['active_cancer','recent_heart_attack','recent_stroke','severe_heart_disease','organ_failure','end_stage_renal'];var postponeSet=['pending_surgery','pending_diagnosis','recent_hospitalization','pregnancy_complication'];for(var i=0;i<med.length;i++){var c=String(med[i]);if(has(declineSet,c)){declineReasons.push(c);}else if(has(postponeSet,c)){postponeReasons.push(c);}}if(age<=30){}else if(age<=40){score+=20;reasons.push('Age band 31-40 (+20)');}else if(age<=50){score+=50;reasons.push('Age band 41-50 (+50)');}else if(age<=60){score+=90;reasons.push('Age band 51-60 (+90)');}else{score+=150;reasons.push('Age band over 60 (+150)');}if(smoker){score+=80;reasons.push('Tobacco/nicotine use (+80)');}if(bmi>0){if(bmi>=18.5&&bmi<=27.9){}else if((bmi>=28&&bmi<=31.9)||(bmi>=17&&bmi<=18.4)){score+=30;reasons.push('BMI outside preferred range (+30)');}else if((bmi>=32&&bmi<=36.9)||(bmi>=15&&bmi<=16.9)){score+=80;reasons.push('Obesity/underweight class II (+80)');}else{score+=150;reasons.push('Severe BMI class III (+150)');}}if(occ<=1){}else if(occ===2){score+=20;reasons.push('Occupation class 2 (+20)');}else if(occ===3){score+=70;reasons.push('Occupation class 3 heavy manual (+70)');}else{score+=150;reasons.push('Occupation class 4 hazardous (+150)');}var medMap={hypertension_controlled:40,hypertension_uncontrolled:120,diabetes_type2_controlled:90,diabetes_type2_uncontrolled:160,diabetes_type1:160,high_cholesterol:30,asthma_mild:20,asthma_severe:80,cancer_remission:150,thyroid_disorder:20,depression_treated:30,sleep_apnea:40,hepatitis_b:60};for(var i=0;i<med.length;i++){var c=String(med[i]);if(medMap[c]){score+=medMap[c];reasons.push('Medical: '+c+' (+'+medMap[c]+')');}}var famMap={cardiac_before_60:40,cancer_before_60:40,stroke_before_60:30,diabetes:20};for(var i=0;i<fam.length;i++){var c=String(fam[i]);if(famMap[c]){score+=famMap[c];reasons.push('Family history: '+c+' (+'+famMap[c]+')');}}var hobMap={scuba_diving:{p:40,x:'Death occurring while scuba diving below 40 metres'},private_aviation:{p:60,x:'Death occurring while piloting a private aircraft'},motorsport:{p:70,x:'Death occurring during competitive motorsport'},mountaineering:{p:50,x:'Death occurring while mountaineering above 4,000 metres'},skydiving:{p:60,x:'Death occurring during skydiving or BASE jumping'}};for(var i=0;i<hob.length;i++){var c=String(hob[i]);if(hobMap[c]){score+=hobMap[c].p;reasons.push('Hazardous pursuit: '+c+' (+'+hobMap[c].p+')');exclusions.push(hobMap[c].x);}}var incomeMultiple=income>0?Math.round((sumAssured/income)*10)/10:null;var forceRefer=false;if(income>0&&sumAssured>income*30){forceRefer=true;referReasons.push('Cover exceeds 30x annual income - financial justification required');}if(sumAssured>=5000000000){forceRefer=true;referReasons.push('Large case (>= Rp 5 miliar) - medical evidence & senior underwriter sign-off required');}var maturityAge=age+term;var band;if(age<18){band='DECLINE';declineReasons.push('below_minimum_entry_age_18');}else if(age>65){band='DECLINE';declineReasons.push('above_maximum_entry_age_65');}else if(term<=0){band='DECLINE';declineReasons.push('invalid_policy_term');}else if(maturityAge>75){band='DECLINE';declineReasons.push('coverage_exceeds_maximum_maturity_age_75');}else if(declineReasons.length>0){band='DECLINE';}else if(postponeReasons.length>0){band='POSTPONE';}else if(score>220){band='DECLINE';declineReasons.push('aggregate_risk_above_automatic_acceptance_limit');}else if(forceRefer){band='REFER';}else if(score<=40){band='STANDARD';}else if(score<=120){band='RATED';}else{band='REFER';}var loadingPct=0;if(band==='RATED'){if(score<=70){loadingPct=50;}else if(score<=100){loadingPct=100;}else{loadingPct=150;}}var riskClass;if(band==='STANDARD'){riskClass=(score<=10&&!smoker)?'PREFERRED':'STANDARD';}else if(band==='RATED'){riskClass='SUBSTANDARD';}else if(band==='REFER'){riskClass='REFER';}else if(band==='POSTPONE'){riskClass='POSTPONED';}else{riskClass='UNINSURABLE';}return {age:age,bmi:bmi,term:term,maturityAge:maturityAge,riskScore:score,band:band,riskClass:riskClass,loadingPct:loadingPct,smoker:smoker,incomeMultiple:incomeMultiple,reasonCodes:reasons,exclusions:exclusions,declineReasons:declineReasons,postponeReasons:postponeReasons,referReasons:referReasons,reasonSummary:reasons.join('; ')};})();"
+      }
+    },
+    {
+      "name": "decision_router",
+      "taskReferenceName": "decision_router_ref",
+      "type": "SWITCH",
+      "evaluatorType": "value-param",
+      "expression": "band",
+      "inputParameters": {
+        "band": "${assess_ref.output.result.band}"
+      },
+      "decisionCases": {
+        "STANDARD": [
+          {
+            "name": "price_standard",
+            "taskReferenceName": "price_standard_ref",
+            "type": "INLINE",
+            "inputParameters": {
+              "evaluatorType": "graaljs",
+              "sumAssured": "${workflow.input.sumAssured}",
+              "age": "${assess_ref.output.result.age}",
+              "smoker": "${assess_ref.output.result.smoker}",
+              "loadingPct": 0,
+              "expression": "(function(){var sa=Number($.sumAssured)||0;var age=Number($.age)||0;var smoker=($.smoker===true||String($.smoker)==='true');var loading=Number($.loadingPct)||0;var rate=1.5+Math.max(0,age-25)*0.12;if(smoker){rate*=1.8;}var base=(sa/1000)*rate;var annual=Math.round((base*(1+loading/100))/1000)*1000;var monthly=Math.round((annual/12)/1000)*1000;return {ratePerMille:Math.round(rate*100)/100,baseAnnualPremium:Math.round(base/1000)*1000,loadingPct:loading,annualPremium:annual,monthlyPremium:monthly};})();"
+            }
+          },
+          {
+            "name": "set_accepted",
+            "taskReferenceName": "set_accepted_ref",
+            "type": "SET_VARIABLE",
+            "inputParameters": {
+              "finalStatus": "ACCEPTED_STANDARD",
+              "riskClass": "${assess_ref.output.result.riskClass}",
+              "annualPremium": "${price_standard_ref.output.result.annualPremium}",
+              "monthlyPremium": "${price_standard_ref.output.result.monthlyPremium}",
+              "loadingPct": 0,
+              "exclusions": "${assess_ref.output.result.exclusions}"
+            }
+          }
+        ],
+        "RATED": [
+          {
+            "name": "price_rated",
+            "taskReferenceName": "price_rated_ref",
+            "type": "INLINE",
+            "inputParameters": {
+              "evaluatorType": "graaljs",
+              "sumAssured": "${workflow.input.sumAssured}",
+              "age": "${assess_ref.output.result.age}",
+              "smoker": "${assess_ref.output.result.smoker}",
+              "loadingPct": "${assess_ref.output.result.loadingPct}",
+              "expression": "(function(){var sa=Number($.sumAssured)||0;var age=Number($.age)||0;var smoker=($.smoker===true||String($.smoker)==='true');var loading=Number($.loadingPct)||0;var rate=1.5+Math.max(0,age-25)*0.12;if(smoker){rate*=1.8;}var base=(sa/1000)*rate;var annual=Math.round((base*(1+loading/100))/1000)*1000;var monthly=Math.round((annual/12)/1000)*1000;return {ratePerMille:Math.round(rate*100)/100,baseAnnualPremium:Math.round(base/1000)*1000,loadingPct:loading,annualPremium:annual,monthlyPremium:monthly};})();"
+            }
+          },
+          {
+            "name": "set_rated",
+            "taskReferenceName": "set_rated_ref",
+            "type": "SET_VARIABLE",
+            "inputParameters": {
+              "finalStatus": "ACCEPTED_RATED",
+              "riskClass": "${assess_ref.output.result.riskClass}",
+              "annualPremium": "${price_rated_ref.output.result.annualPremium}",
+              "monthlyPremium": "${price_rated_ref.output.result.monthlyPremium}",
+              "loadingPct": "${assess_ref.output.result.loadingPct}",
+              "exclusions": "${assess_ref.output.result.exclusions}"
+            }
+          }
+        ],
+        "REFER": [
+          {
+            "name": "underwriter_review",
+            "taskReferenceName": "underwriter_review_ref",
+            "type": "WAIT",
+            "inputParameters": {
+              "applicationId": "${workflow.input.applicationId}",
+              "fullName": "${workflow.input.fullName}",
+              "riskScore": "${assess_ref.output.result.riskScore}",
+              "riskClass": "${assess_ref.output.result.riskClass}",
+              "reasonSummary": "${assess_ref.output.result.reasonSummary}",
+              "referReasons": "${assess_ref.output.result.referReasons}",
+              "sumAssured": "${workflow.input.sumAssured}"
+            }
+          },
+          {
+            "name": "price_referred",
+            "taskReferenceName": "price_referred_ref",
+            "type": "INLINE",
+            "inputParameters": {
+              "evaluatorType": "graaljs",
+              "sumAssured": "${workflow.input.sumAssured}",
+              "age": "${assess_ref.output.result.age}",
+              "smoker": "${assess_ref.output.result.smoker}",
+              "decision": "${underwriter_review_ref.output.decision}",
+              "loadingPct": "${underwriter_review_ref.output.loadingPct}",
+              "expression": "(function(){var decision=String($.decision||'').toUpperCase();var sa=Number($.sumAssured)||0;var age=Number($.age)||0;var smoker=($.smoker===true||String($.smoker)==='true');var loading=Number($.loadingPct)||0;if(decision!=='ACCEPT'){var fs=(decision==='DECLINE')?'DECLINED':'POSTPONED';var rc=(decision==='DECLINE')?'UNINSURABLE':'POSTPONED';return {finalStatus:fs,riskClass:rc,annualPremium:0,monthlyPremium:0,loadingPct:0};}var rate=1.5+Math.max(0,age-25)*0.12;if(smoker){rate*=1.8;}var base=(sa/1000)*rate;var annual=Math.round((base*(1+loading/100))/1000)*1000;var monthly=Math.round((annual/12)/1000)*1000;return {finalStatus:(loading>0?'ACCEPTED_RATED':'ACCEPTED_STANDARD'),riskClass:(loading>0?'SUBSTANDARD':'STANDARD'),annualPremium:annual,monthlyPremium:monthly,loadingPct:loading};})();"
+            }
+          },
+          {
+            "name": "set_referred",
+            "taskReferenceName": "set_referred_ref",
+            "type": "SET_VARIABLE",
+            "inputParameters": {
+              "finalStatus": "${price_referred_ref.output.result.finalStatus}",
+              "riskClass": "${price_referred_ref.output.result.riskClass}",
+              "annualPremium": "${price_referred_ref.output.result.annualPremium}",
+              "monthlyPremium": "${price_referred_ref.output.result.monthlyPremium}",
+              "loadingPct": "${price_referred_ref.output.result.loadingPct}",
+              "exclusions": "${assess_ref.output.result.exclusions}",
+              "reviewNote": "${underwriter_review_ref.output.note}"
+            }
+          }
+        ],
+        "POSTPONE": [
+          {
+            "name": "set_postponed",
+            "taskReferenceName": "set_postponed_ref",
+            "type": "SET_VARIABLE",
+            "inputParameters": {
+              "finalStatus": "POSTPONED",
+              "riskClass": "POSTPONED",
+              "annualPremium": 0,
+              "monthlyPremium": 0,
+              "loadingPct": 0
+            }
+          }
+        ],
+        "DECLINE": [
+          {
+            "name": "set_declined",
+            "taskReferenceName": "set_declined_ref",
+            "type": "SET_VARIABLE",
+            "inputParameters": {
+              "finalStatus": "DECLINED",
+              "riskClass": "UNINSURABLE",
+              "annualPremium": 0,
+              "monthlyPremium": 0,
+              "loadingPct": 0
+            }
+          }
+        ]
+      },
+      "defaultCase": []
+    },
+    {
+      "name": "stringify_context",
+      "taskReferenceName": "stringify_context_ref",
+      "type": "JSON_JQ_TRANSFORM",
+      "inputParameters": {
+        "reasonCodes": "${assess_ref.output.result.reasonCodes}",
+        "exclusions": "${workflow.variables.exclusions}",
+        "declineReasons": "${assess_ref.output.result.declineReasons}",
+        "postponeReasons": "${assess_ref.output.result.postponeReasons}",
+        "referReasons": "${assess_ref.output.result.referReasons}",
+        "queryExpression": "{reasonsText:(if ((.reasonCodes // [])|length)>0 then ((.reasonCodes // [])|join(\"; \")) else \"None\" end),exclusionsText:(if ((.exclusions // [])|length)>0 then ((.exclusions // [])|join(\"; \")) else \"None\" end),declineReasonsText:(if ((.declineReasons // [])|length)>0 then ((.declineReasons // [])|join(\"; \")) else \"None\" end),postponeReasonsText:(if ((.postponeReasons // [])|length)>0 then ((.postponeReasons // [])|join(\"; \")) else \"None\" end),referReasonsText:(if ((.referReasons // [])|length)>0 then ((.referReasons // [])|join(\"; \")) else \"None\" end)}"
+      }
+    },
+    {
+      "name": "generate_decision_letter",
+      "taskReferenceName": "narrative_ref",
+      "type": "LLM_CHAT_COMPLETE",
+      "inputParameters": {
+        "llmProvider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.3,
+        "maxTokens": 800,
+        "jsonOutput": false,
+        "messages": [
+          {
+            "role": "system",
+            "message": "You are an underwriting officer at an Indonesian life insurance company. Write a formal, professional, compliant term-life underwriting decision letter in Markdown. Use ONLY the facts provided; never invent medical findings, amounts, or reasons. For ACCEPTED_STANDARD, confirm the sum assured, policy term, and annual premium. For ACCEPTED_RATED, additionally state the premium loading (as a percentage) and list every policy exclusion provided. For DECLINED, courteously list the specific adverse reasons provided and state the applicant may request the medical evidence used. For POSTPONED, explain that a decision is deferred and invite the applicant to re-apply once the stated matter is resolved. Never state that a policy is in force or that cover has begun until premium is paid. Be concise (under 320 words) and courteous. Begin directly with the salutation (e.g. 'Kepada Yth. ...' or 'Dear ...') and sign off as the Underwriting Department. Do NOT include a letterhead, sender/recipient postal addresses, a date line, reference numbers you were not given, or ANY bracketed placeholder fields such as [Date], [Address], or [Company Name]. Output the raw Markdown of the letter directly. Do NOT wrap your response in code fences or triple backticks, and do not add any commentary before or after the letter."
+          },
+          {
+            "role": "user",
+            "message": "Write a term-life underwriting decision letter for an Indonesian life insurer. All monetary amounts are in Indonesian Rupiah (IDR) - format them with dot thousands separators, e.g. Rp 1.000.000.000.\n- Application ID: ${workflow.input.applicationId}\n- Applicant name: ${workflow.input.fullName}\n- Age at application: ${assess_ref.output.result.age}\n- BMI: ${assess_ref.output.result.bmi}\n- Sum assured (IDR): ${workflow.input.sumAssured}\n- Policy term (years): ${workflow.input.policyTermYears}\n- Decision: ${workflow.variables.finalStatus}\n- Risk class: ${workflow.variables.riskClass}\n- Internal risk score: ${assess_ref.output.result.riskScore}\n- Premium loading (%): ${workflow.variables.loadingPct}\n- Annual premium (IDR): ${workflow.variables.annualPremium}\n- Monthly premium (IDR): ${workflow.variables.monthlyPremium}\n- Rating factors: ${stringify_context_ref.output.result.reasonsText}\n- Policy exclusions: ${stringify_context_ref.output.result.exclusionsText}\n- Decline reasons: ${stringify_context_ref.output.result.declineReasonsText}\n- Postpone reasons: ${stringify_context_ref.output.result.postponeReasonsText}\nReturn only the letter in Markdown."
+          }
+        ]
+      }
+    },
+    {
+      "name": "generate_letter_pdf",
+      "taskReferenceName": "letter_pdf_ref",
+      "type": "GENERATE_PDF",
+      "inputParameters": {
+        "markdown": "${narrative_ref.output.result}",
+        "pageSize": "A4",
+        "theme": "default",
+        "pdfMetadata": {
+          "title": "Term-Life Underwriting Decision - ${workflow.input.fullName}",
+          "author": "Life Underwriting System",
+          "subject": "Application ${workflow.input.applicationId}"
+        }
+      }
+    },
+    {
+      "name": "prepare_notification",
+      "taskReferenceName": "notify_ref",
+      "type": "INLINE",
+      "inputParameters": {
+        "evaluatorType": "graaljs",
+        "applicationId": "${workflow.input.applicationId}",
+        "fullName": "${workflow.input.fullName}",
+        "status": "${workflow.variables.finalStatus}",
+        "annualPremium": "${workflow.variables.annualPremium}",
+        "loadingPct": "${workflow.variables.loadingPct}",
+        "letterLocation": "${letter_pdf_ref.output.result.location}",
+        "expression": "(function(){var status=String($.status||'');var name=String($.fullName||'Nasabah');var fmt=function(n){return 'Rp '+String(n).replace(/\\B(?=(\\d{3})+(?!\\d))/g,'.');};var subject;var body;if(status==='ACCEPTED_STANDARD'){subject='Pengajuan asuransi jiwa Anda disetujui';body='Yth. '+name+', pengajuan asuransi jiwa berjangka Anda DISETUJUI dengan tarif standar. Premi tahunan: '+fmt($.annualPremium)+'. Surat keputusan underwriting terlampir. Pertanggungan berlaku setelah premi dibayarkan.';}else if(status==='ACCEPTED_RATED'){subject='Pengajuan asuransi jiwa Anda disetujui (dengan penyesuaian premi)';body='Yth. '+name+', pengajuan Anda DISETUJUI dengan penyesuaian premi (+'+$.loadingPct+'%). Premi tahunan: '+fmt($.annualPremium)+'. Rincian premi dan pengecualian polis tercantum pada surat terlampir.';}else if(status==='DECLINED'){subject='Informasi mengenai pengajuan asuransi jiwa Anda';body='Yth. '+name+', mohon maaf, pengajuan asuransi jiwa Anda belum dapat kami setujui saat ini. Alasan spesifik tercantum pada surat terlampir.';}else if(status==='POSTPONED'){subject='Pengajuan asuransi jiwa Anda ditunda sementara';body='Yth. '+name+', keputusan atas pengajuan Anda kami TUNDA sementara. Silakan lihat surat terlampir mengenai langkah selanjutnya dan waktu pengajuan ulang.';}else{subject='Pembaruan pengajuan asuransi jiwa Anda';body='Yth. '+name+', pengajuan Anda sedang dalam peninjauan underwriter.';}return {channel:'email',recipientRef:$.applicationId,subject:subject,body:body,policySchedule:$.letterLocation,delivered:false};})();"
+      }
+    }
+  ],
+  "outputParameters": {
+    "applicationId": "${workflow.input.applicationId}",
+    "fullName": "${workflow.input.fullName}",
+    "age": "${assess_ref.output.result.age}",
+    "bmi": "${assess_ref.output.result.bmi}",
+    "riskScore": "${assess_ref.output.result.riskScore}",
+    "band": "${assess_ref.output.result.band}",
+    "riskClass": "${workflow.variables.riskClass}",
+    "incomeMultiple": "${assess_ref.output.result.incomeMultiple}",
+    "reasonCodes": "${assess_ref.output.result.reasonCodes}",
+    "finalStatus": "${workflow.variables.finalStatus}",
+    "loadingPct": "${workflow.variables.loadingPct}",
+    "annualPremium": "${workflow.variables.annualPremium}",
+    "monthlyPremium": "${workflow.variables.monthlyPremium}",
+    "exclusions": "${workflow.variables.exclusions}",
+    "reviewNote": "${workflow.variables.reviewNote}",
+    "decisionLetterMarkdown": "${narrative_ref.output.result}",
+    "decisionLetterPdf": "${letter_pdf_ref.output.result.location}",
+    "notification": "${notify_ref.output.result}"
+  }
+}

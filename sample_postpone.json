@@ -1,0 +1,17 @@
+{
+  "applicationId": "POL-5005",
+  "fullName": "Rina Marlina",
+  "gender": "F",
+  "dateOfBirth": "1990-03-03",
+  "asOfDate": "2026-07-27",
+  "annualIncome": 400000000,
+  "sumAssured": 700000000,
+  "policyTermYears": 20,
+  "smoker": false,
+  "heightCm": 165,
+  "weightKg": 60,
+  "occupationClass": 1,
+  "medicalConditions": ["pending_surgery"],
+  "familyHistory": [],
+  "hazardousHobbies": []
+}

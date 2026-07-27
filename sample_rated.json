@@ -1,0 +1,17 @@
+{
+  "applicationId": "POL-2002",
+  "fullName": "Dewi Lestari",
+  "gender": "F",
+  "dateOfBirth": "1984-01-10",
+  "asOfDate": "2026-07-27",
+  "annualIncome": 600000000,
+  "sumAssured": 1000000000,
+  "policyTermYears": 15,
+  "smoker": false,
+  "heightCm": 178,
+  "weightKg": 89,
+  "occupationClass": 1,
+  "medicalConditions": ["high_cholesterol"],
+  "familyHistory": [],
+  "hazardousHobbies": []
+}

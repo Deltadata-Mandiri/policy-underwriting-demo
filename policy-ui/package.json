@@ -1,0 +1,29 @@
+{
+  "name": "policy-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BRI Life · Term-Life Underwriting console + Conductor credentials proxy",
+  "scripts": {
+    "dev": "node server.js",
+    "sandbox": "ampx sandbox",
+    "sandbox:delete": "ampx sandbox delete"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "//": "@aws-amplify/backend-data's nested tree pins @opentelemetry/core at exactly 2.0.0 while the lock resolves 2.8/2.9, which `npm ci` rejects as out of sync. Collapse it to one version.",
+  "overrides": {
+    "@opentelemetry/core": "2.9.0"
+  },
+  "devDependencies": {
+    "@aws-amplify/backend": "^1.14.0",
+    "@aws-amplify/backend-cli": "^1.4.0",
+    "@types/aws-lambda": "^8.10.147",
+    "@types/node": "^26.1.1",
+    "aws-cdk-lib": "^2.177.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.7.3"
+  }
+}
