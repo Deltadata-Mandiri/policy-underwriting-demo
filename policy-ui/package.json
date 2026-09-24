@@ -2,7 +2,7 @@
   "name": "policy-ui",
   "version": "1.0.0",
   "private": true,
-  "description": "BRI Life · Term-Life Underwriting console + Conductor credentials proxy",
+  "description": "BDN Life · Term-Life Underwriting console + Conductor credentials proxy",
   "scripts": {
     "dev": "node server.js",
     "sandbox": "ampx sandbox",

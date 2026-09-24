@@ -17,7 +17,7 @@ validate → gate → assess_risk → decision_router ─┬─ ACCEPT_STANDARD 
         → decision letter (LLM) → PDF → notify
 ```
 
-Plus **`policy-ui/`** — a BRI Life–themed underwriting console over the workflow, served
+Plus **`policy-ui/`** — a BDN Life–themed underwriting console over the workflow, served
 by a zero-dependency backend-for-frontend proxy that keeps the Conductor key/secret
 server-side. Application form with health/family/hobby checkbox groups, a live decision
 panel (score, premium, exclusions, letter), and an underwriter review panel that drives

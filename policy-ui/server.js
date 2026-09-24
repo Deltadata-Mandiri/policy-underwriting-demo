@@ -1,5 +1,5 @@
 /*
- * BRI Life · Term-Life Underwriting — credentials proxy (backend-for-frontend)
+ * BDN Life · Term-Life Underwriting — credentials proxy (backend-for-frontend)
  *
  * Purpose: keep the Orkes Conductor app key/secret SERVER-SIDE. The browser
  * never receives credentials — it only talks to this proxy's /api/* routes.

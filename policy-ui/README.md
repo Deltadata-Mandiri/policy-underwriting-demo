@@ -1,4 +1,4 @@
-# BRI Life · Underwriting Console
+# BDN Life · Underwriting Console
 
 A simple web console over the `policy_underwriting` workflow, served by a
 zero-dependency backend-for-frontend proxy that keeps the Conductor key/secret
