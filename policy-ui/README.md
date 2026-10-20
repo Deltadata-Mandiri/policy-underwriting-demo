@@ -71,3 +71,17 @@ in git on purpose. Verified end-to-end: browser → Amplify Hosting → Lambda �
 
 Prototype only — no authentication. `reviewedBy` is free text that should be bound to an
 SSO identity before this drives anything real.
+
+## Sample users
+
+Sign in as any of these — password `bdn-demo` for all. The persona decides which
+panels unlock and whose name the workflow records; a user cannot approve an
+execution they started (maker–checker). Every run links to its Orkes execution.
+Personas live in `public/demo-config.js`; the shared kit is described in
+`template-usecase/_kit/README.md`.
+
+| Username | Name | Title | Role |
+|---|---|---|---|
+| `sari` | Sari Wulandari | Bancassurance Specialist | Bancassurance (Maker) |
+| `agus` | Agus Setiawan | Senior Underwriter | Underwriter (Checker) |
+| `lestari` | Lestari Handayani | Chief Underwriter | Bancassurance (Maker), Underwriter (Checker) |

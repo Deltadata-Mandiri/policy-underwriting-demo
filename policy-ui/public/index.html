@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BDN Life · Underwriting Asuransi Jiwa</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="demo-kit.css" />
+  <script src="demo-config.js"></script>
+  <script src="demo-kit.js"></script>
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar" data-kit-replace>
     <div class="brand">
       <span class="logo">BDN<span class="logo-sub">Life</span></span>
       <div class="brand-text">
@@ -20,7 +23,7 @@
 
   <main class="layout">
     <!-- Application form -->
-    <section class="card form-card">
+    <section class="card form-card" id="formCard">
       <h2>Formulir Pengajuan Polis</h2>
       <p class="muted">Lengkapi data calon tertanggung. Nominal dalam Rupiah (IDR).</p>
       <form id="applicationForm">
@@ -120,6 +123,7 @@
         <h2>Keputusan Underwriting</h2>
         <span class="status-pill" id="statusPill">—</span>
       </div>
+      <div id="execBanner"></div>
       <div id="progress" class="progress" hidden>
         <div class="spinner"></div>
         <span id="progressText">Memproses pengajuan…</span>
@@ -167,7 +171,7 @@
             <input id="rvLoading" type="number" min="0" step="25" value="75" />
           </label>
           <label>Underwriter
-            <input id="rvBy" type="text" value="Chief Underwriter" />
+            <input id="rvBy" type="text" value="" readonly title="Diisi dari pengguna yang masuk" />
           </label>
         </div>
         <label>Catatan

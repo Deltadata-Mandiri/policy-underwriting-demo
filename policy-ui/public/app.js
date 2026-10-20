@@ -59,7 +59,7 @@ function showProgress(msg) {
   $('progress').hidden = false;
   $('progressText').textContent = msg || 'Memproses pengajuan…';
   $('decision').hidden = true;
-  $('reviewPanel').hidden = true;
+  showReviewPanel(false);
   $('errorBox').hidden = true;
 }
 function showError(msg) {
@@ -105,6 +105,8 @@ async function submitApplication(e) {
   input.hazardousHobbies = collectGroup('hazardousHobbies');
   // Age is derived from dateOfBirth against asOfDate; use today for a live run.
   input.asOfDate = new Date().toISOString().slice(0, 10);
+  // Who submitted it travels with the application into the Orkes execution.
+  input.requestedBy = DemoKit.actor();
 
   $('resultCard').hidden = false;
   $('resultCard').scrollIntoView({ behavior: 'smooth' });
@@ -119,6 +121,8 @@ async function submitApplication(e) {
       body: JSON.stringify(input),
     });
     currentId = workflowId;
+    DemoKit.track(workflowId, { label: input.fullName + ' · ' + input.applicationId });
+    $('execBanner').innerHTML = DemoKit.execBanner(workflowId);
     startPolling();
   } catch (err) {
     showError(err.message);
@@ -136,6 +140,9 @@ async function poll() {
   if (!currentId) return;
   try {
     const wf = await api('/api/applications/' + currentId);
+    DemoKit.update(currentId, {
+      status: wf.awaitingReview ? 'PERLU TINJAUAN' : ((wf.output || {}).finalStatus || wf.status),
+    });
     if (wf.awaitingReview) {
       clearInterval(polling);
       renderDecision(wf.output, wf.status, true);
@@ -183,7 +190,21 @@ function renderDecision(o, status, awaitingReview) {
 
   $('letterBody').innerHTML = renderMarkdown(o.decisionLetterMarkdown);
 
-  $('reviewPanel').hidden = !awaitingReview;
+  showReviewPanel(awaitingReview);
+}
+
+// The review panel is the underwriter's: hidden behind a role gate for anyone
+// else, and for the person who submitted this application.
+function showReviewPanel(awaiting) {
+  const panel = $('reviewPanel');
+  if (awaiting) {
+    $('rvBy').value = DemoKit.actor();
+    DemoKit.gateEl(panel, { role: 'underwriter', workflowId: currentId, action: 'Tinjauan underwriter' });
+    return;
+  }
+  panel.hidden = true;
+  const lock = panel.nextElementSibling;
+  if (lock && lock.hasAttribute('data-kit-gate')) lock.remove();
 }
 
 async function submitReview() {
@@ -191,7 +212,7 @@ async function submitReview() {
     decision: $('rvDecision').value,
     loadingPct: Number($('rvLoading').value),
     note: $('rvNote').value,
-    reviewedBy: $('rvBy').value,
+    reviewedBy: DemoKit.actor(),
   };
   $('submitReview').disabled = true;
   try {
@@ -200,7 +221,8 @@ async function submitReview() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(decision),
     });
-    $('reviewPanel').hidden = true;
+    DemoKit.acted(currentId, decision.decision);
+    showReviewPanel(false);
     showProgress('Menerapkan keputusan & menyusun surat…');
     startPolling();
   } catch (err) {
@@ -237,6 +259,7 @@ const SAMPLES = {
 function resetForNew() {
   clearInterval(polling);
   currentId = null;
+  $('execBanner').innerHTML = '';
   $('resultCard').hidden = true;
   $('submitBtn').disabled = false;
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -251,3 +274,19 @@ $('fillRefer').addEventListener('click', () => fill(SAMPLES.refer));
 $('fillLargeCase').addEventListener('click', () => fill(SAMPLES.largeCase));
 $('fillDecline').addEventListener('click', () => fill(SAMPLES.decline));
 $('fillPostpone').addEventListener('click', () => fill(SAMPLES.postpone));
+
+// Only the bancassurance side submits applications.
+DemoKit.gateEl($('formCard'), { role: 'agent', action: 'Pengajuan polis' });
+
+// Opening a run from the Activity drawer (or after switching user) re-attaches
+// to that execution and polls it, exactly as the panel that started it did.
+DemoKit.onOpen((run) => {
+  clearInterval(polling);
+  currentId = run.id;
+  $('resultCard').hidden = false;
+  $('execBanner').innerHTML = DemoKit.execBanner(run.id);
+  setStatusPill('RUNNING');
+  showProgress('Memuat eksekusi…');
+  $('resultCard').scrollIntoView({ behavior: 'smooth' });
+  startPolling();
+});
